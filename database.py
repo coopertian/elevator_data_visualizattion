@@ -6,15 +6,21 @@ import numpy as np
 __author__ = 'tiantian'
 
 
-def getTableName():
-    db = dataset.connect('mysql://root:pwd@127.0.0.1/cms_realtime')
+def getDB(db_name):
+    url = 'mysql://root:my-secret-pw@192.168.0.238:32768/' + db_name
+    db = dataset.connect(url)
+    return db
+
+
+def getTableName(db_name):
+    db = getDB(db_name)
     tables = sorted(db.tables)
     return tables
 
 
-def loadData(table_name):
+def loadData(db_name, table_name):
     result = None
-    db = dataset.connect('mysql://root:pwd@127.0.0.1/cms_realtime')
+    db = getDB(db_name)
     db.begin()
     try:
         print table_name
@@ -50,6 +56,10 @@ def loadData(table_name):
 
 #
 # if __name__ == '__main__':
-#     table_name = '20160706'
-#     array5 = loadData(table_name)
-#     print array5
+#     db_name = 'zuoan'
+#     tables = getTableName(db_name)
+#     print len(tables), tables
+#     table_name = tables[0]
+#     array5 = loadData(db_name, table_name)
+#     print array5.shape, array5
+

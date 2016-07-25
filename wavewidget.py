@@ -3,17 +3,17 @@
 
 import os
 import sys
-import numpy as np
 import datetime
+
 from PySide.QtGui import *
 from PySide.QtCore import *
 os.environ["QT_API"] = "pyside"
+import numpy as np
 import matplotlib
 matplotlib.use('Qt4Agg')
 from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
-import matplotlib.pyplot as plt
 matplotlib.rcParams['ytick.major.size'] = 5
 matplotlib.rcParams['xtick.minor.size'] = 3
 matplotlib.rcParams['ytick.minor.size'] = 3
@@ -22,6 +22,8 @@ import seaborn as sns
 sns.set()
 
 import database
+import brake
+import sharemem
 
 
 class TimeWaveform(QDialog):
@@ -32,8 +34,27 @@ class TimeWaveform(QDialog):
         self.y2 = None
         self.y3 = None
         self.y4 = None
+        self.showType = "realtime"
+        self.showTypeBtn = None
 
-        self.setWindowFlags(Qt.WindowCloseButtonHint | Qt.WindowMaximizeButtonHint | Qt.Dialog)
+        # added push button
+        self.showTypeBtn = QPushButton(u"实时数据", self)
+        self.showTypeBtn.setFlat(True)
+        self.showTypeBtn.setStyleSheet('QPushButton {font: bold 20px;}')
+        self.showTypeBtn.clicked.connect(self.showTypeBtnClicked)
+        buttonWidget = QWidget(self)
+        layout2 = QHBoxLayout(buttonWidget)
+        layout2.setAlignment(Qt.AlignHCenter)
+        layout2.setContentsMargins(0, 0, 0, 0)
+        layout2.setSpacing(10)
+        layout2.addWidget(self.showTypeBtn)
+        layout = QVBoxLayout()
+        layout.addWidget(buttonWidget)
+
+        self.setWindowFlags(Qt.WindowCloseButtonHint |
+                            Qt.WindowMinimizeButtonHint |
+                            Qt.WindowMaximizeButtonHint |
+                            Qt.Dialog)
         self.setWindowTitle(u"电梯数据展示工具 ")
         self.mainLayout = QHBoxLayout(self)
         self.mainLayout.setContentsMargins(0, 0, 0, 0)
@@ -44,15 +65,13 @@ class TimeWaveform(QDialog):
         self.treeView.setModel(self.model)
         self.treeView.setHeaderHidden(True)
 
-        fname_custom = {}
-        fname = database.getTableName()
-        custom = [u"亚科中心", u"左岸咖啡"]
-        fname_custom[custom[0]] = fname[0:20]
-        fname_custom[custom[1]] = fname[20:]
-        for cm in fname_custom.keys():
+        custom = ["yakecenter", "zuoan", "nongbotower"]
+        for cm in custom:
             custom = QStandardItem(cm)
             custom.setToolTip(cm)
-            for f in fname_custom[cm]:
+            fnames = database.getTableName(cm)
+            print "fnames == ", fnames
+            for f in fnames:
                 ff = QStandardItem(f)
                 ff.setToolTip(f)
                 custom.appendRow(ff)
@@ -83,27 +102,35 @@ class TimeWaveform(QDialog):
         self.treeView.doubleClicked.connect(self.showChart)
         self.toolBar = NavigationToolbar(self.canvas, self)
         self.frameLayout.addWidget(self.toolBar)
+        self.frameLayout.addWidget(buttonWidget)
         self.frameLayout.addWidget(self.canvas)
 
-    def showChart(self, s):
-        tree_data = s.data(Qt.UserRole)
-        array5 = database.loadData(tree_data['datetime_data'])
-        t = array5[:, 0]
-        self.x = map(lambda k: datetime.datetime.fromtimestamp(k), list(t))
-        self.y1 = array5[:, 1]
-        self.y2 = array5[:, 2]
-        self.y3 = array5[:, 3]
-        self.y4 = array5[:, 4]
+        # load multi thread
+        self.loadRealTimeThread = LoadRealTimeThread(waveform=self, parent=self)
+        self.loadRealTimeThread.finished.connect(self.onFinished)
 
+        self.loadBrakeAmplitudeThread = LoadBrakeAmplitudeThread(waveform=self, parent=self)
+        self.loadBrakeAmplitudeThread.finished.connect(self.onFinished)
+
+    def onFinished(self):
         self.ax.clear()
         self.ax2.clear()
         self.ax3.clear()
         self.ax4.clear()
-
-        self.plotTrend()
+        self.plots()
         self.canvas.draw()
 
-    def plotTrend(self):
+    def showChart(self, s):
+        self.showType = "realtime"
+        self.showTypeBtn.setText(u"实时数据")
+        data_tree = s.data(Qt.UserRole)
+        if not data_tree:
+            return
+        sharemem.Set('data_tree', data_tree)
+        self.loadRealTimeThread.start()
+        self.showLoading()
+
+    def plots(self):
         self.ax.plot(self.x, self.y1, label='max_c1', linestyle='solid', color='orange', linewidth=0.5)
         self.ax.set_ylabel(u"Amplitude")
         self.ax.set_ylim(np.min([self.y1.min(), self.y2.min(), self.y3.min()]) - 1,
@@ -123,6 +150,70 @@ class TimeWaveform(QDialog):
         self.ax4.set_title((str(self.x[0]))[:-3] + "~" + (str(self.x[-1]))[:-3])
         self.ax4.set_ylabel(u"Speed($RPM$)")
         self.ax4.legend()
+
+    def onClicked(self):
+        if self.showType == "realtime":
+            self.loadRealTimeThread.start()
+            self.showLoading()
+        elif self.showType == "brake":
+            self.loadBrakeAmplitudeThread.start()
+            self.showLoading()
+
+    def showTypeBtnClicked(self):
+        if self.showType == "realtime":
+            self.showType = "brake"
+            self.showTypeBtn.setText(u"抱闸幅值")
+            self.onClicked()
+        elif self.showType == "brake":
+            self.showType = "realtime"
+            self.showTypeBtn.setText(u"实时数据")
+            self.onClicked()
+
+    def showLoading(self):
+        self.ax.clear()
+        self.ax2.clear()
+        self.ax3.clear()
+        self.ax4.clear()
+        self.ax4.set_title("Loading...")
+        self.canvas.update()
+
+
+# thread: load data from database
+class LoadRealTimeThread(QThread):
+    def __init__(self, waveform=None, parent=None):
+        super(LoadRealTimeThread, self).__init__(parent)
+        self.waveForm = waveform
+
+    def run(self, *args, **kwargs):
+        data_tree = sharemem.Get('data_tree')
+        db_name = data_tree['custom_name']
+        table_name = data_tree['datetime_data']
+        data_matrix = database.loadData(db_name, table_name)
+        self.waveForm.x = map(lambda k: datetime.datetime.fromtimestamp(k), list(data_matrix[:, 0]))
+        self.waveForm.y1 = data_matrix[:, 1]
+        self.waveForm.y2 = data_matrix[:, 2]
+        self.waveForm.y3 = data_matrix[:, 3]
+        self.waveForm.y4 = data_matrix[:, 4]
+
+
+# thread: find brake from real time dataset
+class LoadBrakeAmplitudeThread(QThread):
+    def __init__(self, waveform=None, parent=None):
+        super(LoadBrakeAmplitudeThread, self).__init__(parent)
+        self.waveForm = waveform
+
+    def run(self, *args, **kwargs):
+        data_tree = sharemem.Get('data_tree')
+        db_name = data_tree['custom_name']
+        table_name = data_tree['datetime_data']
+        data_matrix = database.loadData(db_name, table_name)
+
+        idx_brake = brake.getIdx(data_matrix[:, 4], data_matrix[:, 3])
+        self.waveForm.x = map(lambda k: datetime.datetime.fromtimestamp(k), list(data_matrix[idx_brake, 0]))
+        self.waveForm.y1 = data_matrix[idx_brake, 1]
+        self.waveForm.y2 = data_matrix[idx_brake, 2]
+        self.waveForm.y3 = data_matrix[idx_brake, 3]
+        self.waveForm.y4 = data_matrix[idx_brake, 4]
 
 
 if __name__ == '__main__':
