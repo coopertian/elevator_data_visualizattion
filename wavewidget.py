@@ -38,7 +38,7 @@ class TimeWaveform(QDialog):
         self.showTypeBtn = None
 
         # added push button
-        self.showTypeBtn = QPushButton(u"实时数据", self)
+        self.showTypeBtn = QPushButton(u"realtiime", self)
         self.showTypeBtn.setFlat(True)
         self.showTypeBtn.setStyleSheet('QPushButton {font: bold 20px;}')
         self.showTypeBtn.clicked.connect(self.showTypeBtnClicked)
@@ -55,7 +55,7 @@ class TimeWaveform(QDialog):
                             Qt.WindowMinimizeButtonHint |
                             Qt.WindowMaximizeButtonHint |
                             Qt.Dialog)
-        self.setWindowTitle(u"电梯数据展示工具 ")
+        self.setWindowTitle(u"tool ")
         self.mainLayout = QHBoxLayout(self)
         self.mainLayout.setContentsMargins(0, 0, 0, 0)
         self.splitter = QSplitter(self)
@@ -65,7 +65,7 @@ class TimeWaveform(QDialog):
         self.treeView.setModel(self.model)
         self.treeView.setHeaderHidden(True)
 
-        custom = ["yakecenter", "zuoan", "nongbotower"]
+        custom = ["yk001", "yk002", "yk003"]
         for cm in custom:
             custom = QStandardItem(cm)
             custom.setToolTip(cm)
@@ -122,7 +122,7 @@ class TimeWaveform(QDialog):
 
     def showChart(self, s):
         self.showType = "realtime"
-        self.showTypeBtn.setText(u"实时数据")
+        self.showTypeBtn.setText(u"rl")
         data_tree = s.data(Qt.UserRole)
         if not data_tree:
             return
@@ -132,23 +132,23 @@ class TimeWaveform(QDialog):
 
     def plots(self):
         self.ax.plot(self.x, self.y1, label='max_c1', linestyle='solid', color='orange', linewidth=0.5)
-        self.ax.set_ylabel(u"Amplitude")
+        self.ax.set_ylabel(u"Amp")
         self.ax.set_ylim(np.min([self.y1.min(), self.y2.min(), self.y3.min()]) - 1,
                                 np.max([self.y1.max(), self.y2.max(), self.y3.max()]) + 3)
         self.ax.legend()
 
         self.ax2.plot(self.x, self.y2, label='max_c2', linestyle='solid', color='green', linewidth=0.5)
-        self.ax2.set_ylabel(u"Amplitude")
+        self.ax2.set_ylabel(u"Amp")
         self.ax2.legend()
 
         self.ax3.plot(self.x, self.y3, label='max_c3', linestyle='solid', color='red', linewidth=0.5)
         self.ax3.set_xlabel(u"Time")
-        self.ax3.set_ylabel(u"Amplitude")
+        self.ax3.set_ylabel(u"Amp")
         self.ax3.legend()
 
         self.ax4.plot(self.x, self.y4, label='speed', linestyle='solid', color='blue', linewidth=0.5)
         self.ax4.set_title((str(self.x[0]))[:-3] + "~" + (str(self.x[-1]))[:-3])
-        self.ax4.set_ylabel(u"Speed($RPM$)")
+        self.ax4.set_ylabel(u"Speed")
         self.ax4.legend()
 
     def onClicked(self):
@@ -162,11 +162,11 @@ class TimeWaveform(QDialog):
     def showTypeBtnClicked(self):
         if self.showType == "realtime":
             self.showType = "brake"
-            self.showTypeBtn.setText(u"抱闸幅值")
+            self.showTypeBtn.setText(u"br")
             self.onClicked()
         elif self.showType == "brake":
             self.showType = "realtime"
-            self.showTypeBtn.setText(u"实时数据")
+            self.showTypeBtn.setText(u"rl")
             self.onClicked()
 
     def showLoading(self):

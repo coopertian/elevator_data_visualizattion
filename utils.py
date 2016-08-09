@@ -25,7 +25,6 @@ class ThreadPool(object):
         return self.__future.result(self.__timeout)
 
 
-# 带参数的异步装饰器
 def async(n, base_type, timeout=None):
 
     def decorator(f):

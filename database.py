@@ -7,7 +7,7 @@ __author__ = 'tiantian'
 
 
 def getDB(db_name):
-    url = 'mysql://root:my-secret-pw@192.168.0.238:32768/' + db_name
+    url = 'mysql:' + db_name
     db = dataset.connect(url)
     return db
 
@@ -54,12 +54,4 @@ def loadData(db_name, table_name):
     array5[:, 4] = y_speed
     return array5
 
-#
-# if __name__ == '__main__':
-#     db_name = 'zuoan'
-#     tables = getTableName(db_name)
-#     print len(tables), tables
-#     table_name = tables[0]
-#     array5 = loadData(db_name, table_name)
-#     print array5.shape, array5
 
